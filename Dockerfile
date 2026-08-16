@@ -9,7 +9,6 @@ COPY web-vue/package.json web-vue/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 COPY VERSION /app/VERSION
-COPY CHANGELOG.md /app/CHANGELOG.md
 COPY web-vue ./
 RUN npm run build
 

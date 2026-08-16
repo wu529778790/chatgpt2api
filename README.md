@@ -7,7 +7,7 @@
 <p align="center">将 ChatGPT 官网能力接入 OpenAI 兼容 API，并提供面向多账号、图片任务与自托管场景的管理控制台。</p>
 
 <p align="center">
-  <strong>简体中文</strong> · <a href="./README_EN.md">English</a>
+  <strong>简体中文</strong>
 </p>
 
 <p align="center">
@@ -17,12 +17,6 @@
   <img src="https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL 18" />
   <img src="https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white" alt="Docker ready" />
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue" alt="License AGPL-3.0" /></a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/yukkcat/chatgpt2api/releases/tag/v3.2.2">v3.2.2 Release</a>
-  · <a href="./CHANGELOG.md">更新说明</a>
-  · <a href="./docs/README.md">维护文档</a>
 </p>
 
 > [!IMPORTANT]
@@ -38,59 +32,6 @@
   &nbsp;&nbsp;·&nbsp;&nbsp; <a href="https://pay.ldxp.cn/shop/yukkcat">购买生图账号</a>
   &nbsp;&nbsp;·&nbsp;&nbsp; <a href="https://api.klong.lat">生图 API：小量 ¥0.02/张 · 中转 ¥0.01/张 · 大量/企业 ¥0.009/张</a>
 </p>
-
-## 快速部署
-
-### 一键安装
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/yukkcat/chatgpt2api/main/deploy/install.sh | sudo bash
-```
-
-安装时可选择 SQLite、本地 PostgreSQL 18 容器或已有 PostgreSQL URL。SQLite 无需额外配置；本地 PostgreSQL 由 Compose 自动启动并持久化。
-
-固定安装 `v3.2.2`：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/yukkcat/chatgpt2api/v3.2.2/deploy/install.sh | sudo bash -s -- --branch v3.2.2
-```
-
-### Docker Compose
-
-默认使用 SQLite：
-
-```bash
-git clone https://github.com/yukkcat/chatgpt2api.git
-cd chatgpt2api
-cp .env.example .env
-# 编辑 .env，为 CHATGPT2API_AUTH_KEY 设置私有密钥
-test -f config.json || printf '{}\n' > config.json
-docker compose up -d
-```
-
-| 入口            | 地址                       |
-| :-------------- | :------------------------- |
-| 管理控制台      | `http://localhost:3000`    |
-| OpenAI 兼容 API | `http://localhost:3000/v1` |
-| 数据目录        | `./data`                   |
-
-`.env` 中的 `CHATGPT2API_AUTH_KEY` 优先于 `config.json` 的 `auth-key`。Compose 使用独立运行时卷支持控制台在线更新；控制台设置、账号、用户密钥、调用日志和指标写入 Application Database。不要提交本地 `.env`、`config.json` 或 `data/`。
-
-### PostgreSQL 18
-
-在 `.env` 中设置 `POSTGRES_PASSWORD`，再叠加 PostgreSQL Compose：
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
-```
-
-该模式使用 `postgres:18-alpine` 和命名卷持久化数据，默认不暴露数据库端口。连接已有 PostgreSQL 时直接设置：
-
-```env
-DATABASE_URL=postgresql://user:password@host:5432/database
-```
-
-完整的升级、备份、PostgreSQL 和故障排查说明见 [部署文档](./docs/deployment.md)。
 
 ## 核心能力
 
@@ -127,7 +68,7 @@ flowchart LR
   Services --> Backup["R2 备份"]
 ```
 
-Application Database 保存账号、用户密钥、设置、日志和指标；图片与生成文件使用独立文件存储。详见 [存储架构](./docs/storage-architecture.md)。
+Application Database 保存账号、用户密钥、设置、日志和指标；图片与生成文件使用独立文件存储。
 
 ## API
 
@@ -196,14 +137,6 @@ curl http://localhost:3000/v1/images/generations \
 
 其余设置通过控制台维护。配置项的权威默认值与约束以当前接口投影为准。
 
-## 效果展示
-
-<table width="100%">
-  <tr><td width="50%"><img src="docs/images/1.png" alt="控制台截图 1"></td><td width="50%"><img src="docs/images/2.png" alt="控制台截图 2"></td></tr>
-  <tr><td width="50%"><img src="docs/images/3.png" alt="控制台截图 3"></td><td width="50%"><img src="docs/images/4.png" alt="控制台截图 4"></td></tr>
-  <tr><td width="50%"><img src="docs/images/5.png" alt="控制台截图 5"></td><td width="50%"><img src="docs/images/6.png" alt="控制台截图 6"></td></tr>
-</table>
-
 ## 本地开发
 
 ```bash
@@ -218,19 +151,6 @@ npm run dev
 ```
 
 默认开发地址为 `http://localhost:5173`，后端接口由 Vite 开发代理转发。
-
-## 文档
-
-| 文档                                               | 内容                                 |
-| :------------------------------------------------- | :----------------------------------- |
-| [文档索引](./docs/README.md)                       | 当前架构与维护文档入口               |
-| [部署与运维](./docs/deployment.md)                 | Docker、PostgreSQL、升级、备份与排障 |
-| [存储架构](./docs/storage-architecture.md)         | Application Database 与文件存储边界  |
-| [控制台架构](./docs/control-panel-architecture.md) | 前后端职责、业务投影与交互状态       |
-| [图片失败处理](./docs/image-failure-handling.md)   | 图片失败分类、重试与账号处置         |
-| [上游 SSE](./docs/upstream-sse-conversation.md)    | 会话与流式解析边界                   |
-
-文档与实现冲突时，以当前代码、测试和公开接口契约为准。
 
 ## 许可证
 
