@@ -2,6 +2,8 @@ name: Verify and Publish
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   pull_request:
@@ -119,7 +121,7 @@ jobs:
             release/checksums.txt
 
   docker:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     needs: verify
     runs-on: ubuntu-latest
     permissions:
@@ -151,7 +153,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
             type=ref,event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
