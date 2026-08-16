@@ -1,21 +1,18 @@
 # Deploy
 #
-# 在「Verify and Publish」成功把多架构镜像推送到 GHCR 之后，
-# 通过 SSH 登录目标服务器，直接 `docker run` 拉取新镜像并重启容器。
+# 在「Verify and Publish」成功把镜像推送到 GHCR 之后，
+# 通过 SSH 登录目标服务器，用 `sudo docker run` 拉取 latest 镜像并重启容器。
 # 也可在 Actions 页面手动触发重新部署。
 #
 # 需要在仓库 Settings → Secrets and variables → Actions 中配置（仅三个）：
 #   DEPLOY_HOST      服务器 IP 或域名
-#   DEPLOY_USER      SSH 登录用户名
+#   DEPLOY_USER      SSH 登录用户名（需具备免密 sudo 执行 docker 的权限）
 #   DEPLOY_PASSWORD  SSH 登录密码
 #
 # 以下为非敏感配置，直接改本文件 env 即可：
-#   DEPLOY_PATH  服务器上存放 data/ 与 config.json 的目录（见下方 env）
-#   APP_PORT     容器对外端口（容器内固定 80），默认 3000
-#   DEPLOY_PORT  SSH 端口，默认 22
-#
-# 服务器需具备：SSH 用户有 docker 权限；首次部署会在 DEPLOY_PATH 下自动创建
-# data/ 与空的 config.json（auth-key 写进 config.json 的 "auth-key" 字段）。
+#   APP_PORT   容器对外端口（容器内固定 80），默认 6703
+#   ENV_FILE   服务器上的 .env 路径（含 CHATGPT2API_AUTH_KEY / DATABASE_URL 等）
+#   DEPLOY_PORT SSH 端口，默认 22
 
 name: Deploy
 
@@ -25,22 +22,17 @@ on:
     workflows: ["Verify and Publish"]
     types: [completed]
 
-  # 手动重新部署（可指定镜像 tag，默认 latest）
+  # 手动重新部署
   workflow_dispatch:
-    inputs:
-      image_tag:
-        description: "要部署的镜像 tag，例如 3.2.2 或 latest"
-        required: false
-        default: "latest"
 
 permissions:
   contents: read
 
 env:
   IMAGE_NAME: chatgpt2api
-  DEPLOY_PATH: /opt/chatgpt2api   # 服务器上存放 data/ 与 config.json 的目录
-  APP_PORT: "3000"                # 容器对外端口（容器内固定 80）
-  DEPLOY_PORT: "22"               # SSH 端口
+  APP_PORT: "6703"
+  ENV_FILE: /opt/1panel/apps/openresty/openresty/www/sites/api.shenzjd.com/index/.env
+  DEPLOY_PORT: "22"
 
 jobs:
   deploy:
@@ -53,24 +45,6 @@ jobs:
         startsWith(github.event.workflow_run.head_branch, 'v')))
 
     steps:
-      - name: Resolve image tag
-        id: tag
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.image_tag }}" >> "$GITHUB_OUTPUT"
-          else
-            branch="${{ github.event.workflow_run.head_branch }}"
-            if [ "$branch" = "main" ]; then
-              # main push 对应 docker-publish 打的 latest 标签
-              echo "tag=latest" >> "$GITHUB_OUTPUT"
-            else
-              # head_branch 形如 v3.2.2，去掉前缀 v 得到 3.2.2，
-              # 与 docker-publish.yml 中 metadata-action 的 semver 标签一致
-              echo "tag=${branch#v}" >> "$GITHUB_OUTPUT"
-            fi
-          fi
-
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -81,30 +55,31 @@ jobs:
           script: |
             set -euo pipefail
 
-            APP_DIR="${{ env.DEPLOY_PATH }}"
-            IMAGE="ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}"
-
-            # 首次部署准备 data 目录与 config.json
-            mkdir -p "${APP_DIR}/data"
-            if [ ! -f "${APP_DIR}/config.json" ]; then
-              echo '{}' > "${APP_DIR}/config.json"
-            fi
+            IMAGE="ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest"
+            CONTAINER="${{ env.IMAGE_NAME }}"
+            ENV_FILE="${{ env.ENV_FILE }}"
 
             echo ">> Pulling ${IMAGE}"
-            docker pull "${IMAGE}"
+            sudo docker pull "${IMAGE}"
 
             echo ">> Stopping old container"
-            docker stop chatgpt2api 2>/dev/null || true
-            docker rm chatgpt2api 2>/dev/null || true
+            sudo docker stop "${CONTAINER}" 2>/dev/null || true
+            sudo docker rm "${CONTAINER}" 2>/dev/null || true
+
+            ENV_FLAGS=""
+            if [ -f "${ENV_FILE}" ]; then
+              ENV_FLAGS="--env-file ${ENV_FILE}"
+            else
+              echo ">> WARN: ${ENV_FILE} not found, running without env file"
+            fi
 
             echo ">> Starting container"
-            docker run -d \
-              --name chatgpt2api \
+            sudo docker run -d \
+              --name "${CONTAINER}" \
               --restart unless-stopped \
+              ${ENV_FLAGS} \
               -p "${{ env.APP_PORT }}:80" \
-              -v "${APP_DIR}/data:/app/data" \
-              -v "${APP_DIR}/config.json:/app/config.json" \
               "${IMAGE}"
 
             echo ">> Pruning dangling images"
-            docker image prune -f
+            sudo docker image prune -f
