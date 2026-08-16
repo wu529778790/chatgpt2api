@@ -4,12 +4,14 @@
 # 通过 SSH 登录目标服务器，在部署目录执行 `docker compose pull && up -d`
 # 拉取匹配 tag 的新镜像并重启服务。也可在 Actions 页面手动触发重新部署。
 #
-# 需要在仓库 Settings → Secrets and variables → Actions 中配置：
-#   DEPLOY_HOST     服务器 IP 或域名
-#   DEPLOY_USER     SSH 登录用户名
-#   DEPLOY_SSH_KEY  私钥（完整 PEM 内容，含 BEGIN/END 行）
-#   DEPLOY_PATH     服务器上含 docker-compose.yml / .env / config.json / data 的目录
-#   DEPLOY_PORT     （可选）SSH 端口，默认 22
+# 需要在仓库 Settings → Secrets and variables → Actions 中配置（仅三个）：
+#   DEPLOY_HOST      服务器 IP 或域名
+#   DEPLOY_USER      SSH 登录用户名
+#   DEPLOY_PASSWORD  SSH 登录密码
+#
+# 以下为非敏感配置，直接改本文件 env 即可：
+#   DEPLOY_PATH  服务器上含 docker-compose.yml / .env / config.json / data 的目录（见下方 env）
+#   DEPLOY_PORT  SSH 端口，默认 22
 #
 # 注意：docker-compose.yml 里镜像默认是 ghcr.io/yukkcat/chatgpt2api，
 # 本 workflow 会强制用 CHATGPT2API_IMAGE 覆盖为当前仓库 owner 推送的镜像，
@@ -36,6 +38,8 @@ permissions:
 
 env:
   IMAGE_NAME: chatgpt2api
+  DEPLOY_PATH: /opt/chatgpt2api   # TODO: 改成服务器上含 docker-compose.yml / .env / config.json / data 的目录
+  DEPLOY_PORT: "22"
 
 jobs:
   deploy:
@@ -65,11 +69,11 @@ jobs:
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ secrets.DEPLOY_PORT || '22' }}
+          password: ${{ secrets.DEPLOY_PASSWORD }}
+          port: ${{ env.DEPLOY_PORT }}
           script: |
             set -euo pipefail
-            cd "${{ secrets.DEPLOY_PATH }}"
+            cd "${{ env.DEPLOY_PATH }}"
 
             # 覆盖 compose 默认镜像，指向本次构建推送的 GHCR 镜像
             export CHATGPT2API_IMAGE="ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}"
