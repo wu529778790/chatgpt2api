@@ -44,11 +44,12 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # workflow_run 触发时，仅当上游成功且是 v* tag；手动触发时始终执行
+    # workflow_run 触发时，仅当上游成功且是 main 或 v* tag；手动触发时始终执行
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
-       startsWith(github.event.workflow_run.head_branch, 'v'))
+       (github.event.workflow_run.head_branch == 'main' ||
+        startsWith(github.event.workflow_run.head_branch, 'v')))
 
     steps:
       - name: Resolve image tag
@@ -59,9 +60,14 @@ jobs:
             echo "tag=${{ github.event.inputs.image_tag }}" >> "$GITHUB_OUTPUT"
           else
             branch="${{ github.event.workflow_run.head_branch }}"
-            # head_branch 形如 v3.2.2，去掉前缀 v 得到 3.2.2，
-            # 与 docker-publish.yml 中 metadata-action 的 semver 标签一致
-            echo "tag=${branch#v}" >> "$GITHUB_OUTPUT"
+            if [ "$branch" = "main" ]; then
+              # main push 对应 docker-publish 打的 latest 标签
+              echo "tag=latest" >> "$GITHUB_OUTPUT"
+            else
+              # head_branch 形如 v3.2.2，去掉前缀 v 得到 3.2.2，
+              # 与 docker-publish.yml 中 metadata-action 的 semver 标签一致
+              echo "tag=${branch#v}" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       - name: Deploy via SSH
