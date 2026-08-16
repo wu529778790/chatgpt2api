@@ -31,6 +31,7 @@ permissions:
 env:
   IMAGE_NAME: chatgpt2api
   APP_PORT: "6703"
+  APP_DIR: /opt/1panel/apps/openresty/openresty/www/sites/api.shenzjd.com/index
   ENV_FILE: /opt/1panel/apps/openresty/openresty/www/sites/api.shenzjd.com/index/.env
   DEPLOY_PORT: "22"
 
@@ -58,8 +59,8 @@ jobs:
             IMAGE="ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest"
             CONTAINER="${{ env.IMAGE_NAME }}"
             ENV_FILE="${{ env.ENV_FILE }}"
-            APP_DIR="$(dirname "${ENV_FILE}")"
-            DATA_DIR="${APP_DIR}/data"
+            APP_DIR="${{ env.APP_DIR }}"
+            DATA_DIR="${{ env.APP_DIR }}/data"
 
             # 首次部署准备数据目录与 config.json（SQLite 库 / 图片 / 设置持久化）
             sudo mkdir -p "${DATA_DIR}"
