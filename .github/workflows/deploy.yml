@@ -1,0 +1,84 @@
+# Deploy
+#
+# 在「Verify and Publish」成功把多架构镜像推送到 GHCR 之后，
+# 通过 SSH 登录目标服务器，在部署目录执行 `docker compose pull && up -d`
+# 拉取匹配 tag 的新镜像并重启服务。也可在 Actions 页面手动触发重新部署。
+#
+# 需要在仓库 Settings → Secrets and variables → Actions 中配置：
+#   DEPLOY_HOST     服务器 IP 或域名
+#   DEPLOY_USER     SSH 登录用户名
+#   DEPLOY_SSH_KEY  私钥（完整 PEM 内容，含 BEGIN/END 行）
+#   DEPLOY_PATH     服务器上含 docker-compose.yml / .env / config.json / data 的目录
+#   DEPLOY_PORT     （可选）SSH 端口，默认 22
+#
+# 注意：docker-compose.yml 里镜像默认是 ghcr.io/yukkcat/chatgpt2api，
+# 本 workflow 会强制用 CHATGPT2API_IMAGE 覆盖为当前仓库 owner 推送的镜像，
+# 确保拉取的是本次构建产物。
+
+name: Deploy
+
+on:
+  # 镜像发布成功后自动部署
+  workflow_run:
+    workflows: ["Verify and Publish"]
+    types: [completed]
+
+  # 手动重新部署（可指定镜像 tag，默认 latest）
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "要部署的镜像 tag，例如 3.2.2 或 latest"
+        required: false
+        default: "latest"
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: chatgpt2api
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # workflow_run 触发时，仅当上游成功且是 v* tag；手动触发时始终执行
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
+
+    steps:
+      - name: Resolve image tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            branch="${{ github.event.workflow_run.head_branch }}"
+            # head_branch 形如 v3.2.2，去掉前缀 v 得到 3.2.2，
+            # 与 docker-publish.yml 中 metadata-action 的 semver 标签一致
+            echo "tag=${branch#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || '22' }}
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.DEPLOY_PATH }}"
+
+            # 覆盖 compose 默认镜像，指向本次构建推送的 GHCR 镜像
+            export CHATGPT2API_IMAGE="ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}"
+
+            echo ">> Pulling ${CHATGPT2API_IMAGE}"
+            docker compose pull
+
+            echo ">> Restarting services"
+            docker compose up -d
+
+            echo ">> Pruning dangling images"
+            docker image prune -f
