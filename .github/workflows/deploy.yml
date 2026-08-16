@@ -62,18 +62,23 @@ jobs:
             APP_DIR="${{ env.APP_DIR }}"
             DATA_DIR="${{ env.APP_DIR }}/data"
 
-            # 首次部署准备数据目录与 config.json（SQLite 库 / 图片 / 设置持久化）
+            # 先停掉旧容器，避免 bind mount 继续把 config.json 误建为目录
+            echo ">> Stopping old container"
+            sudo docker stop "${CONTAINER}" 2>/dev/null || true
+            sudo docker rm "${CONTAINER}" 2>/dev/null || true
+
+            # 准备数据目录与 config.json（SQLite 库 / 图片 / 设置持久化）
             sudo mkdir -p "${DATA_DIR}"
+            # bind mount 源缺失时 Docker 会把 config.json 建为目录，先清掉
+            if [ -d "${APP_DIR}/config.json" ]; then
+              sudo rm -rf "${APP_DIR}/config.json"
+            fi
             if [ ! -f "${APP_DIR}/config.json" ]; then
               echo '{}' | sudo tee "${APP_DIR}/config.json" >/dev/null
             fi
 
             echo ">> Pulling ${IMAGE}"
             sudo docker pull "${IMAGE}"
-
-            echo ">> Stopping old container"
-            sudo docker stop "${CONTAINER}" 2>/dev/null || true
-            sudo docker rm "${CONTAINER}" 2>/dev/null || true
 
             ENV_FLAGS=""
             if [ -f "${ENV_FILE}" ]; then
