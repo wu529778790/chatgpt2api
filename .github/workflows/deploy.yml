@@ -38,7 +38,7 @@ permissions:
 
 env:
   IMAGE_NAME: chatgpt2api
-  DEPLOY_PATH: /opt/chatgpt2api   # TODO: 改成服务器上含 docker-compose.yml / .env / config.json / data 的目录
+  DEPLOY_PATH: /opt/1panel/apps/openresty/openresty/www/sites/api.shenzjd.com/index
   DEPLOY_PORT: "22"
 
 jobs:
