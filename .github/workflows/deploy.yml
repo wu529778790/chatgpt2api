@@ -58,6 +58,14 @@ jobs:
             IMAGE="ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest"
             CONTAINER="${{ env.IMAGE_NAME }}"
             ENV_FILE="${{ env.ENV_FILE }}"
+            APP_DIR="$(dirname "${ENV_FILE}")"
+            DATA_DIR="${APP_DIR}/data"
+
+            # 首次部署准备数据目录与 config.json（SQLite 库 / 图片 / 设置持久化）
+            sudo mkdir -p "${DATA_DIR}"
+            if [ ! -f "${APP_DIR}/config.json" ]; then
+              echo '{}' | sudo tee "${APP_DIR}/config.json" >/dev/null
+            fi
 
             echo ">> Pulling ${IMAGE}"
             sudo docker pull "${IMAGE}"
@@ -79,6 +87,8 @@ jobs:
               --restart unless-stopped \
               ${ENV_FLAGS} \
               -p "${{ env.APP_PORT }}:80" \
+              -v "${DATA_DIR}:/app/data" \
+              -v "${APP_DIR}/config.json:/app/config.json" \
               "${IMAGE}"
 
             echo ">> Pruning dangling images"
